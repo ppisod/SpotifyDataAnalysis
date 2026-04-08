@@ -16,7 +16,7 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) throws Exception {
-        stage.setTitle("jackl-spotify-analysis");
+        stage.setTitle("ppi-spotify-analysis");
         Button button = new Button();
         button.setText("hi");
 
