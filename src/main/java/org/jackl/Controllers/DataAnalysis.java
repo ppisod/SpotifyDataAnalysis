@@ -7,6 +7,7 @@ import javafx.scene.Parent;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
@@ -35,6 +36,16 @@ public class DataAnalysis {
     @FXML
     public TextField limitToNum;
     @FXML
+    public ComboBox<String> constraintCol;
+    @FXML
+    public ComboBox<String> constraintOp;
+    @FXML
+    public TextField constraintVal;
+    @FXML
+    public Label constraintLabel;
+    @FXML
+    public CheckBox randomSample;
+    @FXML
     private Label tableNameLabel;
     @FXML
     private Label statusLabel;
@@ -47,6 +58,7 @@ public class DataAnalysis {
 
     private String tableName;
     private List<String> cols;
+    private final List<Constraint> constraints = new ArrayList<>();
 
     public void init() throws Exception {
         Connection connection = Database.getConnection();
@@ -66,12 +78,51 @@ public class DataAnalysis {
             DV3.getItems().add(col);
             IV.getItems().add(col);
             sortBy.getItems().add(col);
+            constraintCol.getItems().add(col);
         }
+
+        constraintOp.getItems().addAll("=", "!=", "<", "<=", ">", ">=");
     }
 
     public void setTableName(String tableName) {
         this.tableName = tableName;
         tableNameLabel.setText("Currently inspecting table: " + tableName);
+    }
+
+    @FXML
+    private void onAddConstraint(ActionEvent actionEvent) {
+        String col = constraintCol.getValue();
+        String op = constraintOp.getValue();
+        String val = constraintVal.getText().trim();
+
+        if (col == null || op == null || val.isEmpty()) {
+            statusLabel.setText("Fill in column, operator, and value");
+            return;
+        }
+
+        constraints.add(new Constraint(col, op, val));
+        constraintVal.clear();
+        updateConstraintLabel();
+    }
+
+    @FXML
+    private void onClearConstraints(ActionEvent actionEvent) {
+        constraints.clear();
+        updateConstraintLabel();
+    }
+
+    private void updateConstraintLabel() {
+        if (constraints.isEmpty()) {
+            constraintLabel.setText("(none)");
+        } else {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < constraints.size(); i++) {
+                if (i > 0) sb.append(", ");
+                Constraint c = constraints.get(i);
+                sb.append(c.col).append(" ").append(c.op).append(" ").append(c.val);
+            }
+            constraintLabel.setText(sb.toString());
+        }
     }
 
     @FXML
@@ -86,7 +137,6 @@ public class DataAnalysis {
 
     @FXML
     public void goButton(ActionEvent actionEvent) {
-
         String ivCol = IV.getValue();
         String dvCol = DV.getValue();
 
@@ -98,28 +148,22 @@ public class DataAnalysis {
         try {
             String query = buildQuery(ivCol, dvCol);
             statusLabel.setText("Query: " + query);
-
             chart.getData().clear();
             xAxis.setLabel(ivCol);
             yAxis.setLabel(dvCol);
-
             XYChart.Series<Number, Number> series1 = queryToSeries(query, ivCol, dvCol, dvCol);
             chart.getData().add(series1);
-
             if (DV2.getValue() != null) {
                 String q2 = buildQuery(ivCol, DV2.getValue());
                 XYChart.Series<Number, Number> s2 = queryToSeries(q2, ivCol, DV2.getValue(), DV2.getValue());
                 chart.getData().add(s2);
             }
-
             if (DV3.getValue() != null) {
                 String q3 = buildQuery(ivCol, DV3.getValue());
                 XYChart.Series<Number, Number> s3 = queryToSeries(q3, ivCol, DV3.getValue(), DV3.getValue());
                 chart.getData().add(s3);
             }
-
             fitAxes();
-
         } catch (Exception e) {
             statusLabel.setText("Error: " + e.getMessage());
         }
@@ -129,11 +173,16 @@ public class DataAnalysis {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT \"").append(esc(ivCol)).append("\", \"").append(esc(dvCol)).append("\"");
         sb.append(" FROM \"").append(esc(tableName)).append("\"");
-
         sb.append(" WHERE \"").append(esc(ivCol)).append("\" IS NOT NULL");
-        sb.append(" AND \"").append(esc(dvCol)).append("\" IS NOT NULL");
+        sb.append(" AND \"").append(esc(dvCol)).append("\" IS NOT NULL"); // basic context
+        for (Constraint c : constraints) { // constraints
+            sb.append(" AND CAST(\"").append(esc(c.col)).append("\" AS REAL) ")
+              .append(c.op).append(" ").append(Double.parseDouble(c.val));
+        }
 
-        if (sortBy.getValue() != null) {
+        if (randomSample.isSelected()) { // random ordering
+            sb.append(" ORDER BY RANDOM()");
+        } else if (sortBy.getValue() != null) {
             sb.append(" ORDER BY \"").append(esc(sortBy.getValue())).append("\"");
             String fl = limitToFirstLast.getText().trim().toLowerCase();
             if (fl.equals("last")) {
@@ -156,7 +205,6 @@ public class DataAnalysis {
     private XYChart.Series<Number, Number> queryToSeries(String query, String ivCol, String dvCol, String seriesName) throws Exception {
         XYChart.Series<Number, Number> series = new XYChart.Series<>();
         series.setName(seriesName);
-
         Connection conn = Database.getConnection();
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
@@ -178,7 +226,6 @@ public class DataAnalysis {
     private void fitAxes() {
         double xMin = Double.MAX_VALUE, xMax = -Double.MAX_VALUE;
         double yMin = Double.MAX_VALUE, yMax = -Double.MAX_VALUE;
-
         for (XYChart.Series<Number, Number> series : chart.getData()) {
             for (XYChart.Data<Number, Number> d : series.getData()) {
                 double x = d.getXValue().doubleValue();
@@ -189,26 +236,27 @@ public class DataAnalysis {
                 yMax = Math.max(yMax, y);
             }
         }
-
         if (xMin == Double.MAX_VALUE) return;
-
         double xPad = (xMax - xMin) * 0.05;
         double yPad = (yMax - yMin) * 0.05;
         if (xPad == 0) xPad = 1;
         if (yPad == 0) yPad = 1;
-
         xAxis.setAutoRanging(false);
         xAxis.setLowerBound(xMin - xPad);
         xAxis.setUpperBound(xMax + xPad);
         xAxis.setTickUnit((xMax - xMin) / 10);
-
         yAxis.setAutoRanging(false);
         yAxis.setLowerBound(yMin - yPad);
         yAxis.setUpperBound(yMax + yPad);
         yAxis.setTickUnit((yMax - yMin) / 10);
     }
 
+    /// safety
     private String esc(String col) {
         return col.replace("\"", "\"\"");
+    }
+
+    private record Constraint(String col, String op, String val) {
+        // rec for holdings
     }
 }

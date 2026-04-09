@@ -31,11 +31,24 @@
             <padding>
                 <Insets left="10" right="10" bottom="10"/>
             </padding>
+            <Label text="Constraints:"/>
+            <ComboBox fx:id="constraintCol" promptText="Column..."/>
+            <ComboBox fx:id="constraintOp" promptText="Op..."/>
+            <TextField fx:id="constraintVal" promptText="Value"/>
+            <Button text="Add" onAction="#onAddConstraint"/>
+            <Button text="Clear" onAction="#onClearConstraints"/>
+            <Label fx:id="constraintLabel" text="(none)"/>
+        </HBox>
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <padding>
+                <Insets left="10" right="10" bottom="10"/>
+            </padding>
             <Label text="Sampling"/>
             <ComboBox fx:id="sortBy" promptText="Sort by..."/>
             <Label text="Limit to:"/>
             <TextField fx:id="limitToFirstLast" promptText="first/last"/>
             <TextField fx:id="limitToNum" promptText="# of entries"/>
+            <CheckBox fx:id="randomSample" text="Random sample"/>
         </HBox>
         <HBox spacing="10" alignment="CENTER_LEFT">
             <padding>
