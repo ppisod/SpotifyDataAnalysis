@@ -58,8 +58,24 @@ public class CsvLoader {
                         ps.setNull(i + 1, java.sql.Types.NULL);
                     } else {
                         switch (csv.columnTypes[i]) {
-                            case INT -> ps.setLong(i + 1, Long.parseLong(val));
-                            case FLOAT -> ps.setDouble(i + 1, Double.parseDouble(val));
+                            case INT -> {
+                                try {
+                                    ps.setLong(i + 1, Long.parseLong(val));
+                                } catch (NumberFormatException e) {
+                                    try {
+                                        ps.setDouble(i + 1, Double.parseDouble(val));
+                                    } catch (NumberFormatException e2) {
+                                        ps.setNull(i + 1, java.sql.Types.NULL);
+                                    }
+                                }
+                            }
+                            case FLOAT -> {
+                                try {
+                                    ps.setDouble(i + 1, Double.parseDouble(val));
+                                } catch (NumberFormatException e) {
+                                    ps.setNull(i + 1, java.sql.Types.NULL);
+                                }
+                            }
                             case TEXT -> ps.setString(i + 1, val);
                         }
                     }
